@@ -10,7 +10,7 @@ from utils.security import require_auth
 
 auth_bp = Blueprint("auth", __name__)
 
-@auth_bp.route("/secure", methods=["POST"])
+@auth_bp.route("/secure", methods=["GET"])
 @require_auth
 def secure():
     return jsonify({"message": "Erfolgreich authentifiziert"})
