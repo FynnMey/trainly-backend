@@ -8,7 +8,7 @@ import datetime
 
 from utils.security import require_auth
 
-auth_bp = Blueprint("auth", __name__)
+auth_bp = Blueprint("auth_route", __name__)
 
 @auth_bp.route("/secure", methods=["GET"])
 @require_auth
@@ -35,10 +35,9 @@ def login():
     password = data.get("password")
     device_id = data.get("device_id")
 
-    print(data)
-
     if not account or not password:
         return jsonify({"error": "Missing fields"}), 400
+
 
     user = User.query.filter_by(account=account).first()
     if not user or not user.check_password(password):

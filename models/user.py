@@ -10,6 +10,7 @@ class User(db.Model):
     device_id = db.Column(db.String(128))
 
     def set_password(self, password):
+        print(generate_password_hash(password))
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):

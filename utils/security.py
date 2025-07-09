@@ -15,8 +15,6 @@ def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         token = request.headers.get("token")
-        print(token)
-        print('----')
         if not token:
             return jsonify({"error": "Token fehlt"}), 401
 
@@ -39,9 +37,6 @@ def require_auth(f):
         db_user = User.query.get(user_id)
         if not db_user:
             return jsonify({"error": "Benutzer nicht gefunden"}), 401
-
-        print(decoded.get("device_id"))
-        print(db_user.device_id)
 
         if (
             decoded.get("account") != db_user.account or
