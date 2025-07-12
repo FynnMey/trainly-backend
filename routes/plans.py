@@ -5,7 +5,6 @@ from models.planExercise import PlanExercise
 from models.plan import Plan
 from extensions import db
 
-
 plans_bp = Blueprint("plans_route", __name__)
 
 @plans_bp.route("/plan", methods=["POST"])
@@ -14,7 +13,7 @@ def get_plan():
     data = request.get_json()
 
     plan = db.session.query(Plan).filter(
-        (Plan.id == data['plan_id']) & (Plan.user_id == data['user_id'])
+        (Plan.id == data['plan_id'])
     ).first()
 
     if not plan:
