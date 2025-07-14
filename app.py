@@ -1,5 +1,5 @@
+# app.py
 from flask import Flask
-
 from config import Config
 from extensions import db
 from routes import register_routes
@@ -7,16 +7,19 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from seed_data import seed_data
 
-load_dotenv()
-app = Flask(__name__)
-app.config.from_object(Config)
+def create_app():
+    load_dotenv()
+    app = Flask(__name__)
+    app.config.from_object(Config)
 
-CORS(app, supports_credentials=True, origins="*")
-db.init_app(app)
-register_routes(app)
+    CORS(app, supports_credentials=True, origins="*")
+    db.init_app(app)
+    register_routes(app)
 
-if __name__ == "__main__":
     with app.app_context():
         db.create_all()
         seed_data()
-    app.run(debug=True, host="0.0.0.0")
+
+    return app
+
+app = create_app()
