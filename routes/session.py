@@ -1,5 +1,4 @@
 from flask import Blueprint, jsonify, request
-
 from models import Session, Plan, PlanExercise, SessionExercise, SessionSet, Exercise
 from utils.security import require_auth
 from extensions import db
@@ -7,130 +6,67 @@ import datetime
 
 session_bp = Blueprint("session_route", __name__)
 
+
+def get_active_session(user_id):
+    return db.session.query(Session).filter(
+        (Session.user_id == user_id) & (Session.finished_at.is_(None))
+    ).first()
+
+
+def get_plan(plan_id):
+    return db.session.query(Plan).filter_by(id=plan_id).first()
+
+
+def get_previous_sets(exercise_id, limit):
+    return (
+        db.session.query(SessionSet)
+        .join(SessionExercise)
+        .filter(SessionExercise.exercise_id == exercise_id)
+        .order_by(SessionSet.timestamp.desc())
+        .limit(limit)
+        .all()[::-1]
+    )
+
+
 @session_bp.route("/session-finish", methods=["POST"])
 @require_auth
 def session_finish():
     data = request.get_json()
-
     session_id = data.get("sessionId")
 
-    session = db.session.query(Session).filter(Session.id == session_id).first()
+    if not session_id:
+        return jsonify({"error": "Missing sessionId"}), 400
 
-    if session is None:
-        return jsonify({"error": "Session set not found."}), 400
+    session = db.session.query(Session).filter_by(id=session_id).first()
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
 
     session.finished_at = datetime.datetime.now()
     db.session.commit()
 
-    return jsonify({"message": "Weight updated successfully"}), 200
-
-
-@session_bp.route("/set-weight", methods=["POST"])
-@require_auth
-def session_set_weight():
-    data = request.get_json()
-
-    weight = data.get("weight")
-    session_set_id = data.get("sessionSetId")
-
-    if weight is None or session_set_id is None:
-        return jsonify({"error": "Missing required fields: weight or sessionSetId"}), 400
-
-    try:
-        weight = float(weight)
-    except (ValueError, TypeError):
-        return jsonify({"error": "Please enter a valid number."}), 400
-
-    session_set = db.session.query(SessionSet).filter(SessionSet.id == session_set_id).first()
-
-    if session_set is None:
-        return jsonify({"error": "Session set not found."}), 400
-
-    session_set.weight = weight
-    db.session.commit()
-
-    return jsonify({"message": "Weight updated successfully"}), 200
-
-
-@session_bp.route("/set-done", methods=["POST"])
-@require_auth
-def session_set_done():
-    data = request.get_json()
-
-    done = data.get("done")
-    session_set_id = data.get("sessionSetId")
-
-    print(done)
-
-    if session_set_id is None or done is None:
-        return jsonify({"error": "Missing required fields: reps and/or sessionSetId"}), 400
-
-    try:
-        done = bool(done)
-    except (ValueError, TypeError):
-        return jsonify({"error": "Please enter a valid number for reps."}), 400
-
-    session_set = db.session.query(SessionSet).filter(SessionSet.id == session_set_id).first()
-
-    if session_set is None:
-        return jsonify({"error": "Session set not found."}), 400
-
-    session_set.done = done
-    db.session.commit()
-
-    print(session_set.done)
-
-    return jsonify({"message": "Reps updated successfully."}), 200
-
-
-@session_bp.route("/set-reps", methods=["POST"])
-@require_auth
-def session_set_reps():
-    data = request.get_json()
-
-    reps = data.get("reps")
-    session_set_id = data.get("sessionSetId")
-
-    if session_set_id is None or reps is None:
-        return jsonify({"error": "Missing required fields: reps and/or sessionSetId"}), 400
-
-    try:
-        reps = int(reps)
-    except (ValueError, TypeError):
-        return jsonify({"error": "Please enter a valid number for reps."}), 400
-
-    session_set = db.session.query(SessionSet).filter(SessionSet.id == session_set_id).first()
-
-    if session_set is None:
-        return jsonify({"error": "Session set not found."}), 400
-
-    session_set.reps = reps
-    db.session.commit()
-
-    return jsonify({"message": "Reps updated successfully."}), 200
+    return jsonify({"message": "Session finished successfully."}), 200
 
 
 @session_bp.route("/set-session", methods=["POST"])
 @require_auth
 def set_session():
     data = request.get_json()
+    user_id = data.get("userId")
+    plan_id = data.get("planId")
 
-    existing_session = db.session.query(Session).filter(
-        (Session.user_id == data["userId"]) & (Session.finished_at.is_(None))
-    ).first()
+    if user_id is None or plan_id is None:
+        return jsonify({"error": "Missing userId or planId"}), 400
 
-    print(existing_session)
-
-    if existing_session:
+    if get_active_session(user_id):
         return jsonify({"error": "You already have an active session."}), 400
 
-    plan = db.session.query(Plan).filter(Plan.id == data['planId']).first()
+    plan = get_plan(plan_id)
     if not plan:
         return jsonify({"error": "Plan not found"}), 404
 
     session = Session(
-        user_id=data["userId"],
-        plan_id=data["planId"],
+        user_id=user_id,
+        plan_id=plan_id,
         started_at=datetime.datetime.now(),
         finished_at=None,
         is_synced=False,
@@ -138,7 +74,7 @@ def set_session():
     db.session.add(session)
     db.session.flush()
 
-    plan_exercises = db.session.query(PlanExercise).filter(PlanExercise.plan_id == plan.id).all()
+    plan_exercises = db.session.query(PlanExercise).filter_by(plan_id=plan.id).all()
 
     for pe in plan_exercises:
         session_exercise = SessionExercise(
@@ -149,18 +85,11 @@ def set_session():
         db.session.add(session_exercise)
         db.session.flush()
 
-        last_sets = (
-            db.session.query(SessionSet)
-            .join(SessionExercise)
-            .filter(SessionExercise.exercise_id == pe.exercise_id)
-            .order_by(SessionSet.timestamp.desc())
-            .limit(pe.sets)
-            .all()[::-1]
-        )
+        previous_sets = get_previous_sets(pe.exercise_id, pe.sets)
 
         for i in range(pe.sets):
-            last_weight = last_sets[i].weight if i < len(last_sets) else 0
-            last_reps = last_sets[i].reps if i < len(last_sets) else 10
+            last_weight = previous_sets[i].weight if i < len(previous_sets) else 0
+            last_reps = previous_sets[i].reps if i < len(previous_sets) else 10
 
             session_set = SessionSet(
                 session_exercise_id=session_exercise.id,
@@ -172,33 +101,30 @@ def set_session():
 
     db.session.commit()
 
-    return jsonify({ "success": True, "sessionId": session.id })
+    return jsonify({"success": True, "sessionId": session.id}), 201
+
 
 @session_bp.route("/session", methods=["POST"])
 @require_auth
 def get_session():
     data = request.get_json()
-    user_id = data["user_id"]
-
-    print(user_id)
+    user_id = data.get("userId")
 
     if user_id is None:
-        return jsonify({"error": "user_id is required"}), 400
+        return jsonify({"error": "Missing userId"}), 400
 
-    session = db.session.query(Session).filter(
-        (Session.user_id == user_id) & (Session.finished_at.is_(None))
-    ).first()
-
+    session = get_active_session(user_id)
     if not session:
-        return jsonify({ "session": False })
+        return jsonify({"session": False}), 200
+
 
     session_exercises = db.session.query(SessionExercise).filter_by(session_id=session.id).all()
-
     exercises_data = []
+
     for se in session_exercises:
         exercise = db.session.query(Exercise).filter_by(id=se.exercise_id).first()
-
         sets = db.session.query(SessionSet).filter_by(session_exercise_id=se.id).all()
+
         sets_data = [
             {
                 "id": s.id,
@@ -216,7 +142,7 @@ def get_session():
             "order": se.order,
             "name": exercise.name if exercise else "Unknown",
             "imageUrl": exercise.image_url if exercise else "",
-            "sets": sets_data
+            "sets": sets_data,
         })
 
     session_data = {
@@ -224,7 +150,7 @@ def get_session():
         "userId": session.user_id,
         "planId": session.plan_id,
         "started_at": session.started_at.isoformat(),
-        "exercises": exercises_data
+        "exercises": exercises_data,
     }
 
-    return jsonify({ "session": session_data })
+    return jsonify({"session": session_data}), 200

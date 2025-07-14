@@ -22,6 +22,4 @@ def get_exercises():
         } for r in results
     ]
 
-    print(response)
-
     return jsonify(response)

@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
 
-import utils
 from models import User
 from extensions import db
 import jwt

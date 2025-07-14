@@ -10,9 +10,9 @@ def seed_data():
     if not User.query.first():
         admin = User(
             id=0,
-            name="Admin",
-            account="admin",
-            password_hash="hashed_admin_password"
+            name=os.getenv("ACCOUNT_NAME"),
+            account=os.getenv("ACCOUNT"),
+            password_hash=os.getenv("ACCOUNT_HASP_PASSWORD")
         )
         db.session.add(admin)
         db.session.commit()
